@@ -112,7 +112,7 @@ func (n *node) pushBackChild(child interface{}, transient bool) (created bool, n
 	return false, newn
 }
 
-// PVector represents radix search trie
+// PVector is a persistent vector.
 type PVector struct {
 	root      *node
 	len       int
@@ -125,7 +125,7 @@ func (pv PVector) Len() int {
 	return pv.len
 }
 
-// At ...
+// At returns a value at idx.
 func (pv PVector) At(idx int) (interface{}, error) {
 	if idx < 0 || idx >= pv.len {
 		return nil, fmt.Errorf("radixtrie.At: wrong idx(%v)", idx)
@@ -133,7 +133,7 @@ func (pv PVector) At(idx int) (interface{}, error) {
 	return pv.root.at(idx, pv.shift), nil
 }
 
-// Update ...
+// Update updates a value at idx.
 func (pv PVector) Update(idx int, v interface{}) (PVector, error) {
 	if idx < 0 || idx >= pv.len {
 		return pv, fmt.Errorf("radixtrie.Update: wrong idx(%v)", idx)
@@ -141,7 +141,7 @@ func (pv PVector) Update(idx int, v interface{}) (PVector, error) {
 	return PVector{pv.root.update(idx, v, pv.shift, pv.transient), pv.len, pv.shift, pv.transient}, nil
 }
 
-// PushBack ...
+// PushBack adds a value at the end.
 func (pv PVector) PushBack(v interface{}) PVector {
 	if pv.root == nil {
 		newroot := &node{}
@@ -171,14 +171,15 @@ func (pv PVector) PushBack(v interface{}) PVector {
 	return PVector{newroot, pv.len + 1, pv.shift, pv.transient}
 }
 
-// ConvertTransient ...
+// ConvertTransient make a transient version of a given pvector.
+// a transient vector updates in-place. This is for a performace optimization.
 func (pv PVector) ConvertTransient() PVector {
 	newpv := pv
 	newpv.transient = true
 	return newpv
 }
 
-// ConvertPersistent ...
+// ConvertPersistent converts a transient vector to a persistent one.
 func (pv PVector) ConvertPersistent() {
 	pv.transient = false
 	pv.root.convertPersistent(pv.shift)
