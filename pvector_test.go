@@ -8,7 +8,7 @@ import (
 	"github.com/kibumh/pcontainer"
 )
 
-func ExamplePushBack() {
+func ExamplePVector_PushBack() {
 	pv0 := pcontainer.PVector{}
 	fmt.Println("pv0's len:", pv0.Len())
 	for i := 0; i < pv0.Len(); i++ {
@@ -79,7 +79,7 @@ func ExamplePushBack() {
 	// 1024 <nil>
 }
 
-func ExampleUpdate() {
+func ExamplePVector_Update() {
 	pv0 := pcontainer.PVector{}
 	pv1 := pv0.PushBack(0)
 	pv2 := pv1.PushBack(1)
@@ -104,7 +104,7 @@ func ExampleUpdate() {
 	// 2 <nil>
 }
 
-func TestTransient(t *testing.T) {
+func TestPVector_Transient(t *testing.T) {
 	// pv0 {}
 	// pv1 {0}
 	// pv2 {0, 1}
@@ -148,14 +148,14 @@ func TestTransient(t *testing.T) {
 
 }
 
-func BenchmarkPushBack(b *testing.B) {
+func BenchmarkPVector_PushBack(b *testing.B) {
 	pv := pcontainer.PVector{}
 	for i := 0; i < b.N; i++ {
 		pv = pv.PushBack(i)
 	}
 }
 
-func BenchmarkTransientPushBack(b *testing.B) {
+func BenchmarkPVector_PushBack_Transient(b *testing.B) {
 	pv := pcontainer.PVector{}
 	pv = pv.ConvertTransient()
 	for i := 0; i < b.N; i++ {
@@ -163,7 +163,7 @@ func BenchmarkTransientPushBack(b *testing.B) {
 	}
 }
 
-func BenchmarkSlicePushBack(b *testing.B) {
+func BenchmarkSlice_append(b *testing.B) {
 	s := []int{}
 	for i := 0; i < b.N; i++ {
 		s = append(s, i)
@@ -173,7 +173,7 @@ func BenchmarkSlicePushBack(b *testing.B) {
 	}
 }
 
-func BenchmarkAt(b *testing.B) {
+func BenchmarkPVector_At(b *testing.B) {
 	len := 3000000
 	pv := pcontainer.PVector{}
 	pv = pv.ConvertTransient()
@@ -186,7 +186,7 @@ func BenchmarkAt(b *testing.B) {
 	}
 }
 
-func BenchmarkSliceAt(b *testing.B) {
+func BenchmarkSlice_At(b *testing.B) {
 	len := 3000000
 	s := []int{}
 	for i := 0; i < len; i++ {

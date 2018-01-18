@@ -172,7 +172,7 @@ func (pv PVector) PushBack(v interface{}) PVector {
 }
 
 // ConvertTransient make a transient version of a given pvector.
-// a transient vector updates in-place. This is for a performace optimization.
+// a transient vector updates in-place. This is for a performance optimization.
 func (pv PVector) ConvertTransient() PVector {
 	newpv := pv
 	newpv.transient = true
