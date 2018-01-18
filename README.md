@@ -1,4 +1,7 @@
+
+[![GoDoc](https://godoc.org/github.com/kibumh/pcontainer?status.svg)](https://godoc.org/github.com/kibumh/pcontainer)
 [![Build Status](https://travis-ci.org/kibumh/pcontainer.png)](https://travis-ci.org/kibumh/pcontainer)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kibumh/pcontainer)](https://goreportcard.com/report/github.com/kibumh/pcontainer)
 
 # What is this?
 Persistent Containers implemented in golang inspired by Clojure programming language.
@@ -8,9 +11,6 @@ Persistent Containers implemented in golang inspired by Clojure programming lang
 ```bash
 go get github.com/kibumh/pcontainer
 ```
-
-# GoDoc
-https://godoc.org/github.com/kibumh/pcontainer
 
 # Performance
 ## PushBack
