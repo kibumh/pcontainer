@@ -2,6 +2,7 @@ package pcontainer
 
 import (
 	"fmt"
+	"strings"
 )
 
 const (
@@ -9,13 +10,22 @@ const (
 	branchingFactor = 1 << branchingBit // 32
 	branchingMask   = branchingFactor - 1
 
+	// Following masks are for node.status.
 	transientMask = 0x80
-	lenMask       = 0x1f
+	lenMask       = 0x3f
 )
 
 type node struct {
 	children [branchingFactor]interface{}
-	status   uint8 // T00LLLLL : T (transient bit), L(len)
+	status   uint8 // T0LLLLLL : T (transient bit), L(len)
+}
+
+func newNode(transient bool) *node {
+	n := &node{}
+	if transient {
+		n.status |= transientMask
+	}
+	return n
 }
 
 func (n *node) len() uint8 {
@@ -26,25 +36,19 @@ func (n *node) incLen() {
 	n.status++
 }
 
-func (n *node) setLen(len uint8) {
-	n.status = n.status&transientMask + len
-}
-
 func (n *node) isTransient() bool {
-	return n.status&transientMask == transientMask
+	return (n.status & transientMask) == transientMask
 }
 
 func (n *node) convertPersistent(shift uint8) {
 	if !n.isTransient() {
 		return
 	}
+	n.status &= lenMask
 	if shift == 0 {
-		n.status &= lenMask
 		return
 	}
-
-	l := n.len()
-	for i := uint8(0); i < l; i++ {
+	for i := uint8(0); i < n.len(); i++ {
 		n.children[i].(*node).convertPersistent(shift - branchingBit)
 	}
 }
@@ -57,15 +61,13 @@ func (n *node) at(idx int, shift uint8) interface{} {
 }
 
 func (n *node) clone(transient bool) *node {
+	// In transient mode, we update in-place. So no clone!
 	if transient && n.isTransient() {
 		return n
 	}
-	newn := &node{}
+	newn := newNode(transient)
 	copy(newn.children[:], n.children[:])
-	newn.status = n.status
-	if transient {
-		newn.status |= transientMask
-	}
+	newn.status |= n.status & lenMask
 	return newn
 }
 
@@ -80,36 +82,30 @@ func (n *node) update(idx int, v interface{}, shift uint8, transient bool) *node
 	return newn
 }
 
-func (n *node) pushBack(v interface{}, shift uint8, transient bool) (created bool, newn *node) {
+func (n *node) pushBack(v interface{}, shift uint8, transient bool) (newn *node, overflowed bool) {
 	if shift == 0 {
 		return n.pushBackChild(v, transient)
 	}
-
-	createdChild, newChild := n.children[n.len()-1].(*node).pushBack(v, shift-branchingBit, transient)
-
-	if !createdChild {
-		newn = n.clone(transient)
-		newn.children[newn.len()-1] = newChild
-		return false, newn
-	}
-
-	return n.pushBackChild(newChild, transient)
-}
-
-func (n *node) pushBackChild(child interface{}, transient bool) (created bool, newn *node) {
-	if n.len() == branchingFactor {
-		newn = &node{}
-		newn.children[0] = child
-		newn.setLen(1)
-		if transient {
-			newn.status |= transientMask
-		}
-		return true, newn
+	newChild, overflowed := n.children[n.len()-1].(*node).pushBack(v, shift-branchingBit, transient)
+	if overflowed {
+		return n.pushBackChild(newChild, transient)
 	}
 	newn = n.clone(transient)
+	newn.children[newn.len()-1] = newChild
+	return newn, false
+}
+
+func (n *node) pushBackChild(child interface{}, transient bool) (newn *node, overflowed bool) {
+	overflowed = n.len() == branchingFactor
+	if overflowed {
+		newn = newNode(transient)
+	} else {
+		newn = n.clone(transient)
+	}
+
 	newn.children[newn.len()] = child
 	newn.incLen()
-	return false, newn
+	return newn, overflowed
 }
 
 // PVector is a persistent vector.
@@ -125,18 +121,18 @@ func (pv PVector) Len() int {
 	return pv.len
 }
 
-// At returns a value at idx.
-func (pv PVector) At(idx int) (interface{}, error) {
+// At returns a value at a given index.
+func (pv *PVector) At(idx int) (interface{}, error) {
 	if idx < 0 || idx >= pv.len {
-		return nil, fmt.Errorf("radixtrie.At: wrong idx(%v)", idx)
+		return nil, fmt.Errorf("wrong index: idx(%d), len(%d)", idx, pv.len)
 	}
 	return pv.root.at(idx, pv.shift), nil
 }
 
-// Update updates a value at idx.
+// Update updates a value at a given index.
 func (pv PVector) Update(idx int, v interface{}) (PVector, error) {
 	if idx < 0 || idx >= pv.len {
-		return pv, fmt.Errorf("radixtrie.Update: wrong idx(%v)", idx)
+		return pv, fmt.Errorf("wrong index: idx(%d), len(%d)", idx, pv.len)
 	}
 	return PVector{pv.root.update(idx, v, pv.shift, pv.transient), pv.len, pv.shift, pv.transient}, nil
 }
@@ -144,43 +140,43 @@ func (pv PVector) Update(idx int, v interface{}) (PVector, error) {
 // PushBack adds a value at the end.
 func (pv PVector) PushBack(v interface{}) PVector {
 	if pv.root == nil {
-		newroot := &node{}
-		newroot.children[0] = v
-		newroot.setLen(1)
-		if pv.transient {
-			newroot.status |= transientMask
-		}
-		return PVector{newroot, 1, 0, pv.transient}
+		pv.root = newNode(pv.transient)
 	}
-
-	created, newn := pv.root.pushBack(v, pv.shift, pv.transient)
-	if !created {
+	newn, overflowed := pv.root.pushBack(v, pv.shift, pv.transient)
+	if !overflowed {
 		return PVector{newn, pv.len + 1, pv.shift, pv.transient}
 	}
 
-	if pv.root.len() == branchingFactor {
-		newroot := &node{}
-		newroot.children[0] = pv.root
-		newroot.children[1] = newn
-		newroot.setLen(2)
-		return PVector{newroot, pv.len + 1, pv.shift + branchingBit, pv.transient}
-	}
-	newroot := pv.root.clone(pv.transient)
-	newroot.children[newroot.len()] = newn
-	newroot.status++
-	return PVector{newroot, pv.len + 1, pv.shift, pv.transient}
+	newroot := newNode(pv.transient)
+	newroot.children[0] = pv.root
+	newroot.incLen()
+	newroot.children[1] = newn
+	newroot.incLen()
+	return PVector{newroot, pv.len + 1, pv.shift + branchingBit, pv.transient}
 }
 
-// ConvertTransient make a transient version of a given pvector.
-// a transient vector updates in-place. This is for a performance optimization.
+// ConvertTransient makes a given pvector transient.
+// (A transient vector updates in-place. This is for a performance optimization.)
 func (pv PVector) ConvertTransient() PVector {
-	newpv := pv
-	newpv.transient = true
-	return newpv
+	pv.transient = true
+	return pv
 }
 
 // ConvertPersistent converts a transient vector to a persistent one.
-func (pv PVector) ConvertPersistent() {
+func (pv *PVector) ConvertPersistent() {
 	pv.transient = false
 	pv.root.convertPersistent(pv.shift)
+}
+
+func (pv PVector) String() string {
+	var b strings.Builder
+	fmt.Fprint(&b, "[")
+	sep := ""
+	for i := 0; i < pv.Len(); i++ {
+		v, _ := pv.At(i)
+		fmt.Fprintf(&b, "%s%v", sep, v)
+		sep = " "
+	}
+	fmt.Fprint(&b, "]")
+	return b.String()
 }
