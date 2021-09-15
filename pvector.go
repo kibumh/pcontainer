@@ -117,7 +117,7 @@ type PVector struct {
 }
 
 // Len returns the number of values
-func (pv PVector) Len() int {
+func (pv *PVector) Len() int {
 	return pv.len
 }
 
